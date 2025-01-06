@@ -100,7 +100,7 @@ class DecisionNode(Node):
             raise ValueError("State must contain a 'messages' key")
             
         message_w_prompt = state['messages']
-        message_w_prompt.append(SystemMessage(content=self.node_prompt))
+        message_w_prompt = [SystemMessage(content=self.node_prompt)] + message_w_prompt
         response = self.llm.invoke(message_w_prompt)  # use llm to decide which choice to make
         
         for choice in self.choices:
