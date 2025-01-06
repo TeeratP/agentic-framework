@@ -66,8 +66,7 @@ class DecisionNode(Node):
         assert choices, "DecisionNode requires choices to be set."
         super().__init__(name, llm, node_prompt)
         self.choices_name: List[str] = choices
-        self.choices_created: bool = False
-        self.choices: List[Choice] = []
+        self._create_choices()
         
     def _create_choices(self) -> None:
         """
@@ -96,26 +95,23 @@ class DecisionNode(Node):
         if self.llm is None:
             raise ValueError(f"{self.name} requires a LLM to be set before call.")
         
-        if not self.choices_created:
-            self._create_choices()
         
-        if 'message' not in state:
-            raise ValueError("State must contain a 'message' key")
+        if 'messages' not in state:
+            raise ValueError("State must contain a 'messages' key")
             
-        message_w_prompt = state['message']
+        message_w_prompt = state['messages']
         message_w_prompt.append(SystemMessage(content=self.node_prompt))
         response = self.llm.invoke(message_w_prompt)  # use llm to decide which choice to make
         
-        if response['choice'] in self.choices_name:
-            for choice in self.choices:
-                if response['choice'] == choice.name:
-                    if choice.child is None:
-                        raise ValueError(
-                            f"Choice {response['choice']} does not have a child. "
-                            "Please create an edge from this choice to another node. "
-                            "For example: `decision_node['abc'] > other_node`"
-                        )
-                    return choice.child.name
+        for choice in self.choices:
+            if response.choice == choice.name:
+                if choice.child is None:
+                    raise ValueError(
+                        f"Choice {response.choice} does not have a child. "
+                        "Please create an edge from this choice to another node. "
+                        "For example: `decision_node['abc'] > other_node`"
+                    )
+                return choice.child.name
         raise ValueError(f"Choice {response['choice']} not found in choices")
         
     def __gt__(self, other) -> None:

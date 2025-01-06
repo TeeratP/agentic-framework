@@ -39,6 +39,7 @@ Here's an example of creating a simple agent workflow:
 ```python
 from agentic_framework.nodes import AgentNode, DecisionNode
 from agentic_framework.graph import AgenticGraph
+from agentic_framework.state import AgenticState
 
 # Create nodes
 agent = AgentNode(

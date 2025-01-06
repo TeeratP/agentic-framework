@@ -47,16 +47,16 @@ class AgentNode(Node):
         if self.llm is None:
             raise ValueError(f"{self.name} requires a LLM to be set before call.")
         
-        if 'message' not in state:
-            raise ValueError("State must contain a 'message' key")
+        if 'messages' not in state:
+            raise ValueError("State must contain a 'messages' key")
             
-        message_w_prompt = state['message']
+        message_w_prompt = state['messages']
         message_w_prompt.append(SystemMessage(content=self.node_prompt))
         response = self.llm.invoke(message_w_prompt)
         new_state = state
-        new_state['message'].append(response)
-        if isinstance(new_state, AgenticState):
-            new_state.log.append(f'{self.name}:{response.content}')
+        new_state['messages'].append(response)
+        if 'log' in new_state:
+            new_state['log'].append(f'{self.name}:{response.content}')
         
         return new_state
     

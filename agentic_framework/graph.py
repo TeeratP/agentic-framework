@@ -16,7 +16,7 @@ class AgenticGraph(StateGraph):
     agent-based workflows.
     """
     
-    def __init__(self, state: MessagesState, start_node: Union[AgentNode, DecisionNode], end_nodes: Set[AgentNode]) -> None:
+    def __init__(self, state: MessagesState, start_node, end_nodes) -> None:
         """
         Initialize the AgenticGraph.
         
@@ -29,15 +29,14 @@ class AgenticGraph(StateGraph):
         self.start_node = start_node
         self.end_nodes = end_nodes
         
-        self.registered_node: Set = set()
+        self._seen_nodes: Set = set()
         self.build_graph()
-        self.compile()
         
     def build_graph(self) -> None:
         """Build the graph structure starting from the start node."""
         self._build_graph(self.start_node, START)
         
-    def _build_graph(self, node: Union[AgentNode, DecisionNode], prev_node: Union[str, AgentNode, DecisionNode]) -> None:
+    def _build_graph(self, node, prev_node) -> None:
         """
         Recursively build the graph structure.
         
@@ -48,24 +47,28 @@ class AgenticGraph(StateGraph):
         Raises:
             TypeError: If node is neither AgentNode nor DecisionNode
         """
-        if node in self.registered_node:
+        prev_node_name = prev_node if prev_node == START else prev_node.name
+        curr_node_name = node.name
+        
+        if curr_node_name in self._seen_nodes:
             return
         
-        self.registered_node.add(node)
+        self._seen_nodes.add(curr_node_name)
         
         if isinstance(node, AgentNode):
-            self.add_node(node, node.name)
-            if isinstance(prev_node, DecisionNode):  # normal case
-                self.add_edge(prev_node, node.name)
+                        
+            self.add_node(curr_node_name, node)
+            if not isinstance(prev_node, DecisionNode):  # normal case
+                self.add_edge(prev_node_name, curr_node_name)
             # else: edge from decision node is already added in DecisionNode
             
             if node in self.end_nodes:
-                self.add_edge(node, END)  # only case that creates forward edge is when node is end node
+                self.add_edge(curr_node_name, END)  # only case that creates forward edge is when node is end node
             else:
                 self._build_graph(node.child, node)  # recursively build graph
             
         elif isinstance(node, DecisionNode):
-            self.add_conditional_edges(prev_node, node)  # node performs as function that returns name of next node
+            self.add_conditional_edges(prev_node_name, node)  # node performs as function that returns name of next node
             for choice in node.choices:
                 self._build_graph(choice.child, node)
         else:
