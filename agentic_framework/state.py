@@ -3,8 +3,10 @@ State management for the Agentic Framework.
 """
 
 from typing import List
-from langchain.schema import AnyMessage
-from pydantic import BaseModel
+# from langchain.schema import AnyMessage
+# from pydantic import BaseModel
+from langgraph.graph import MessagesState
 
-class State(BaseModel):
-    message: List[AnyMessage] = []
+class AgenticState(MessagesState):
+    log: List[str] = []
+    

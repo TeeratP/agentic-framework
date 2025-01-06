@@ -14,7 +14,7 @@ class Choice:
     Each Choice has a name and can be connected to another node in the graph.
     """
     
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str):
         """
         Initialize a Choice.
         
@@ -22,9 +22,9 @@ class Choice:
             name: Unique identifier for this choice
         """
         self.name = name
-        self.child: Optional[Union['AgentNode', 'DecisionNode']] = None
+        self.child = None
         
-    def __gt__(self, other: Union['AgentNode', 'DecisionNode']) -> Union['AgentNode', 'DecisionNode']:
+    def __gt__(self, other):
         """
         Create an edge from this choice to another node.
         
@@ -80,7 +80,7 @@ class DecisionNode(Node):
         self.choices = [Choice(name) for name in self.choices_name]
         self.choices_created = True
         
-    def __call__(self, state: Dict[str, Any]) -> str:
+    def __call__(self, state):
         """
         Process the current state and make a decision.
         
@@ -118,7 +118,7 @@ class DecisionNode(Node):
                     return choice.child.name
         raise ValueError(f"Choice {response['choice']} not found in choices")
         
-    def __gt__(self, other: Any) -> None:
+    def __gt__(self, other) -> None:
         """
         Prevent direct edge creation from DecisionNode.
         

@@ -2,10 +2,11 @@
 Agent node implementation for the Agentic Framework.
 """
 
+from hmac import new
 from typing import Any, Dict, Optional, Union
 from agentic_framework.node import Node
 from langchain_core.messages import SystemMessage
-from agentic_framework.state import State
+from agentic_framework.state import AgenticState
 
 class AgentNode(Node):
     """
@@ -28,9 +29,9 @@ class AgentNode(Node):
             node_prompt: System prompt/instructions for the language model
         """
         super().__init__(name, llm, node_prompt)
-        self.child: Optional[Union['AgentNode', 'DecisionNode']] = None
+        self.child = None
         
-    def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, state):
         """
         Process the current state and generate a response.
         
@@ -54,9 +55,12 @@ class AgentNode(Node):
         response = self.llm.invoke(message_w_prompt)
         new_state = state
         new_state['message'].append(response)
+        if isinstance(new_state, AgenticState):
+            new_state.log.append(f'{self.name}:{response.content}')
+        
         return new_state
     
-    def __gt__(self, other: Union['AgentNode', 'DecisionNode']) -> Union['AgentNode', 'DecisionNode']:
+    def __gt__(self, other):
         """
         Create edge from this node to another node.
         

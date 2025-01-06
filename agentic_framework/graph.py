@@ -3,11 +3,11 @@ Graph implementation for the Agentic Framework.
 """
 
 from typing import Set, Union
-from langgraph.graph import Graph, START, END
+from langgraph.graph import StateGraph, START, END, MessagesState
 from agentic_framework.nodes.agent_node import AgentNode
 from agentic_framework.nodes.decision_node import DecisionNode
 
-class AgenticGraph(Graph):
+class AgenticGraph(StateGraph):
     """
     A graph implementation for managing agent and decision nodes in a workflow.
     
@@ -16,7 +16,7 @@ class AgenticGraph(Graph):
     agent-based workflows.
     """
     
-    def __init__(self, start_node: Union[AgentNode, DecisionNode], end_nodes: Set[AgentNode]):
+    def __init__(self, state: MessagesState, start_node: Union[AgentNode, DecisionNode], end_nodes: Set[AgentNode]) -> None:
         """
         Initialize the AgenticGraph.
         
@@ -24,13 +24,14 @@ class AgenticGraph(Graph):
             start_node: The initial node in the graph
             end_nodes: Set of nodes that represent terminal states
         """
-        super().__init__()
+        super().__init__(state)
         
         self.start_node = start_node
         self.end_nodes = end_nodes
         
         self.registered_node: Set = set()
         self.build_graph()
+        self.compile()
         
     def build_graph(self) -> None:
         """Build the graph structure starting from the start node."""

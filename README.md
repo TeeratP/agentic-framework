@@ -4,12 +4,12 @@ A framework for building agent-based AI systems using LangGraph. This framework 
 
 ## Features
 
-- **Node System**: 
+- **Node System**:
   - `AgentNode`: Process messages and generate responses using language models
   - `DecisionNode`: Make branching decisions based on language model output
   - Extensible base `Node` class for custom node types
 
-- **Graph Management**: 
+- **Graph Management**:
   - Automated graph construction from node relationships
   - Support for conditional edges and decision-based routing
   - Type-safe node connections and state management
@@ -73,6 +73,7 @@ decision["negative"] > negative_handler
 
 # Create and build graph
 graph = AgenticGraph(
+    state=AgenticState,
     start_node=agent,
     end_nodes={positive_handler, negative_handler}
 )
