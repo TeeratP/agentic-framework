@@ -6,7 +6,11 @@ A framework for building agent-based AI systems using LangGraph. This framework 
 
 - **Node System**:
   - `AgentNode`: Process messages and generate responses using language models
+    - Tool binding support for integrating external functions
+    - Automatic tool call handling and response processing
   - `DecisionNode`: Make branching decisions based on language model output
+    - Structured output using Pydantic models
+    - Type-safe choice handling
   - Extensible base `Node` class for custom node types
 
 - **Graph Management**:
@@ -15,8 +19,8 @@ A framework for building agent-based AI systems using LangGraph. This framework 
   - Type-safe node connections and state management
 
 - **State Management**:
-  - Conversation history tracking
-  - Message-based state updates
+  - Conversation history tracking using LangChain message types
+  - Automatic logging of node outputs and tool calls
   - Structured state validation
 
 ## Requirements
@@ -34,48 +38,89 @@ pip install -r requirements.txt
 
 ## Usage
 
-Here's an example of creating a simple agent workflow:
+Here's an example of creating an agent workflow with tool integration and decision making:
 
 ```python
 from agentic_framework.nodes import AgentNode, DecisionNode
 from agentic_framework.graph import AgenticGraph
 from agentic_framework.state import AgenticState
 
+# Define a tool function
+def search_database(query: str) -> str:
+    """Search the database for information."""
+    # Implementation here
+    return f"Results for {query}"
+
 # Create nodes
-agent = AgentNode(
-    name="processor",
-    llm=your_llm,  # Your language model instance
-    node_prompt="Process the input and provide a detailed response"
+research_agent = AgentNode(
+    name="researcher",
+    llm=your_llm,
+    node_prompt="Research the given topic using the search tool and provide a detailed response"
 )
+# Bind tool to the agent
+research_agent.bind_tools(search_database)
 
 decision = DecisionNode(
     name="classifier",
     llm=your_llm,
-    node_prompt="Classify the response as either 'positive' or 'negative'",
-    choices=["positive", "negative"]
+    node_prompt="Based on the research results, classify if we need more information or can proceed with a conclusion",
+    choices=["need_more_info", "conclude"]
 )
 
-positive_handler = AgentNode(
-    name="positive_handler",
+follow_up = AgentNode(
+    name="follow_up",
     llm=your_llm,
-    node_prompt="Handle positive response"
+    node_prompt="Generate follow-up questions for additional research"
 )
 
-negative_handler = AgentNode(
-    name="negative_handler",
+conclusion = AgentNode(
+    name="conclusion",
     llm=your_llm,
-    node_prompt="Handle negative response"
+    node_prompt="Synthesize the research into a final conclusion"
 )
 
 # Connect nodes
-agent > decision
-decision["positive"] > positive_handler
-decision["negative"] > negative_handler
+research_agent > decision
+decision["need_more_info"] > follow_up
+decision["conclude"] > conclusion
+follow_up > research_agent  # Create a research loop
 
 # Create and build graph
 graph = AgenticGraph(
     state=AgenticState,
-    start_node=agent,
-    end_nodes={positive_handler, negative_handler}
+    start_node=research_agent,
+    end_nodes={conclusion}
 )
+
+# Run the graph
+state = {"messages": [HumanMessage(content="Research quantum computing advances")]}
+result = graph.invoke(state)
 ```
+
+The framework will:
+
+1. Start with the research agent, which can use its search tool
+2. Pass results to the decision node for classification
+3. Either generate follow-up questions and loop back to research, or
+4. Proceed to the conclusion node for final synthesis
+
+## State and Logging
+
+The framework automatically maintains conversation history and can log operations:
+
+```python
+state = {
+    "messages": [...],  # Conversation history using LangChain message types
+    "log": [           # Optional logging of operations
+        "researcher: Found initial results on quantum computing",
+        "tools: search_database, args: {'query': 'quantum computing'}, result: ...",
+        "classifier: Need more specific information",
+        "follow_up: Generated questions about quantum error correction"
+    ]
+}
+```
+
+## TODO
+
+- structured output for llm
+- RAG tools

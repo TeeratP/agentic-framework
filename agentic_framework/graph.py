@@ -28,13 +28,30 @@ class AgenticGraph(StateGraph):
         
         self.start_node = start_node
         self.end_nodes = end_nodes
+        self.child = None
         
         self._seen_nodes: Set = set()
         self.build_graph()
+        self.compiled_graph = self.compile()
         
     def build_graph(self) -> None:
         """Build the graph structure starting from the start node."""
         self._build_graph(self.start_node, START)
+        
+    def __call__(self, state):
+        """
+        Process the current state through the graph.
+        
+        Args:
+            state: Current conversation state containing message history
+            
+        Returns:
+            Updated state after processing through the graph
+        """
+        return self.compiled_graph(state)
+    
+    def compile(self, checkpointer = None, *, store = None, interrupt_before = None, interrupt_after = None, debug = False):
+        return super().compile(checkpointer, store=store, interrupt_before=interrupt_before, interrupt_after=interrupt_after, debug=debug)
         
     def _build_graph(self, node, prev_node) -> None:
         """
@@ -73,3 +90,16 @@ class AgenticGraph(StateGraph):
                 self._build_graph(choice.child, node)
         else:
             raise TypeError(f"Unsupported node type: {type(node)}. Must be either AgentNode or DecisionNode")
+
+    def __gt__(self, other):
+        """
+        Create edge from this node to another node.
+        
+        Args:
+            other: The node to create an edge to
+            
+        Returns:
+            The other node to allow for chain building
+        """
+        self.child = other
+        return other
