@@ -51,11 +51,12 @@ Remaining:
 ## Status
 
 <!-- AUTO-MAINTAINED by .githooks/post-commit — keep this a 1-3 sentence summary -->
-3-phase LangGraph-native refactor complete on branch `roadmap/phases-1-3`: reducer state, delta nodes, decision routing field, interrupt/resume, RAG tool, packaging, streaming/async, configurable I/O fields. Phase 4 (on the LangGraph 1.0 / LangChain 1.0 stack) is now layering resilience/perf knobs: per-node `reasoning_effort` on `AgentNode`, `cache_ttl`/`retry` policies with an auto-provided `InMemoryCache`, and a `durability` passthrough on all invoke/stream methods. 33 tests pass; a runnable end-to-end demo lives at `examples/sample_usage.py` (tool-using agent → decision routing → branched handlers, wired with `>`).
+Phases 1–4 are complete on branch `roadmap/phases-1-3` (LangGraph 1.0 / LangChain 1.0 stack): reducer state, delta nodes, decision routing field, interrupt/resume, RAG tool, packaging, streaming/async, configurable I/O fields, plus Phase 4 resilience/perf knobs — per-node `reasoning_effort` on `AgentNode`, `cache_ttl`/`retry` with an auto-provided `InMemoryCache`, and a `durability` passthrough. 33 tests pass; a runnable end-to-end demo lives at `examples/sample_usage.py`. Repo hygiene cleaned up: build artifacts (`egg-info`) are untracked and ignored.
 
 ## Recent changes
 
 <!-- AUTO-MAINTAINED by .githooks/post-commit — newest first, max 15 bullets -->
+- d3f52d1 2026-06-17 — Stop tracking build artifacts (`agentic_framework.egg-info`); add `__pycache__/`/`*.egg-info/`/`.venv/` to .gitignore
 - a561424 2026-06-17 — Phase 4 #2-4: AgentNode `reasoning_effort`, per-node `cache_ttl`/`retry` knobs (auto `InMemoryCache`), and `durability` passthrough on invoke/stream; 33 tests pass
 - 666ef08 2026-06-17 — Phase 4 #1: upgrade to LangGraph 1.0 / LangChain 1.0 stack (tool imports → `langchain_core.tools`, `MemorySaver`→`InMemorySaver`, relocked deps); 28 tests pass unchanged
 - 86e8d91 2026-06-17 — Stop tracking `.env` (committed before the ignore rule); leaked key remains in history and should be rotated
