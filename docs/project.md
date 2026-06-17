@@ -8,42 +8,57 @@ The **Status** and **Recent changes** sections at the bottom are auto-maintained
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"        # editable install + pytest  (or: uv pip install -e ".[dev]")
 ```
 
-- Requires `OPENAI_API_KEY` in `.env` (loaded via `python-dotenv`'s `load_dotenv()`).
-- **No test suite, no linter, no build step.** Verification is manual — `test.ipynb` is the scratchpad and the de-facto usage example.
+- Python **3.10–3.12** (the pinned `requirements.txt` lock targets 3.12; 3.14 can't build the pinned numpy/pandas).
+- Real LLM calls need `OPENAI_API_KEY` in `.env` — see `.env.example`.
+- Optional extras: `.[openai]` (langchain-openai + dotenv for the notebook), `.[rag]` (langchain-chroma for `ChromaRAG`).
 
 ## Dependencies & gotchas
 
-- `test.ipynb` imports `langchain_ollama` (`ChatOllama`), which is **not** in `requirements.txt`. Either `pip install langchain-ollama` or stick to the `ChatOpenAI` line.
-- Dependencies are pinned in `requirements.txt` (LangGraph 0.2.60, LangChain 0.3.x, langchain-openai, Pydantic 2.x).
+- `pyproject.toml` declares the **direct** deps (langgraph, langchain, langchain-core, pydantic) + extras. `requirements.txt` remains the **frozen lock** for exact reproduction (now includes pytest).
+- `test.ipynb` imports `langchain_ollama` (`ChatOllama`), which is **not** declared. Either `pip install langchain-ollama` or stick to the `ChatOpenAI` line.
+- `ChromaRAG` needs the `rag` extra; the import of `langchain_chroma` is lazy so `agentic_framework.tools` imports fine without it.
 
 ## Verifying changes
 
-There are no automated tests. After changing framework code, re-run the relevant cells in `test.ipynb` to confirm graphs still build (`AgenticGraph(...)`) and invoke (`graph.invoke({'messages': [...], 'log': []})`). Inspect `state['log']` for the per-node trace.
+- **Automated:** `python -m pytest tests/` — 28 tests, no API calls (a scripted `FakeLLM` stands in for the model). Covers state reducers, graph construction, routing, the tool-call loop, interrupt/resume, RAG tool wiring, streaming/async, and configurable fields.
+- **Manual / live model:** run `test.ipynb` with `OPENAI_API_KEY` set; inspect `state['log']` for the per-node trace. (Notebook outputs are cleared in git — re-run locally.)
 
 ## Current status & rough edges
 
-- **InputNode interrupt resumption is incomplete.** `InputNode.__call__` uses LangGraph's `interrupt()`, but `AgenticGraph.compile()` is called with `checkpointer=None` in `__init__`, so resuming after an interrupt needs extra wiring before it works end-to-end. (See `TODO.md` — "Human Node".)
-- `AgenticState.messages` is annotated `List[str]` but actually holds LangChain message objects; the annotation is aspirational, not enforced.
+The 3-phase LangGraph-native refactor (branch `roadmap/phases-1-3`) is complete: reducer-based state, delta-returning nodes, routing off the message stream, interrupt/resume, RAG tooling, packaging, streaming/async, and configurable I/O fields. Remaining rough edges:
+
+- **Async is graph-level only.** `ainvoke`/`astream` run the sync nodes in LangGraph's threadpool; true per-node async LLM calls (a node-level `ainvoke` using `llm.ainvoke`) are not implemented yet.
+- **ChromaRAG is untested end-to-end.** Only `make_retriever_tool` is covered (fake retriever); the Chroma path needs live embeddings and isn't exercised by the suite.
+- `test.ipynb` hasn't been re-run against a live model since the refactor (outputs cleared).
 
 ## Roadmap
 
-From `TODO.md`:
-- Human/Input node — make input a separate, resumable step rather than a blocking interrupt.
-- RAG tools — currently stubbed/commented in `tools/rag_tool.py`.
-- Configurable input/output fields per node.
-- Conversation memory (`ConversationChain` / `ConversationSummaryMemory`).
-- LangSmith integration.
-- TTS and STT nodes.
+Done in the refactor:
+- [x] Resumable Human/Input node — `checkpointer` + `Command(resume=...)`.
+- [x] RAG tools — `make_retriever_tool` + `ChromaRAG`.
+- [x] Configurable input/output fields per node — `AgentNode`/`DecisionNode`.
+- [x] LangSmith integration — automatic via env vars (see `.env.example`).
+
+Remaining:
+- [ ] Conversation memory (`ConversationSummaryMemory`-style summarization node).
+- [ ] TTS and STT nodes.
+- [ ] True per-node async LLM execution.
 
 ## Status
 
 <!-- AUTO-MAINTAINED by .githooks/post-commit — keep this a 1-3 sentence summary -->
-Early-stage framework. Latest tracked work: `InputNode` added for human-in-the-loop, plus state/import cleanup (commit ecc40bb).
+3-phase LangGraph-native refactor complete on branch `roadmap/phases-1-3`: reducer state, delta nodes, decision routing field, interrupt/resume, RAG tool, packaging, streaming/async, configurable I/O fields. 28 tests passing.
 
 ## Recent changes
 
 <!-- AUTO-MAINTAINED by .githooks/post-commit — newest first, max 15 bullets -->
+- 7f1735b 2026-06-17 — Phase 3: streaming/async, configurable I/O fields, LangSmith docs
+- 9bfebfa 2026-06-17 — Phase 2: interrupt/resume, tool-loop cap, RAG tool, packaging
+- bcd7d8f 2026-06-17 — Phase 1: pytest suite + clear stale notebook outputs
+- a97590e 2026-06-17 — Phase 1: nodes return deltas; routing off messages; dup-name guard
+- c86c91a 2026-06-17 — Phase 1: reducer-based AgenticState + decision routing field
+- d7fe0a1 2026-06-17 — Add static/living docs split and post-commit docs hook
 - ecc40bb 2026-06-17 — Add InputNode for human-in-the-loop and clean up state/imports
