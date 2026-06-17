@@ -18,7 +18,8 @@ class AgentNode(Node):
     def __init__(self,
                  name: str = 'agent_node',
                  llm: Optional[Any] = None,
-                 node_prompt: str = "you are a helpful assistant") -> None:
+                 node_prompt: str = "you are a helpful assistant",
+                 max_tool_iterations: int = 25) -> None:
         """
         Initialize an AgentNode.
 
@@ -26,10 +27,13 @@ class AgentNode(Node):
             name: Unique identifier for the node
             llm: Language model instance to be used by this node
             node_prompt: System prompt/instructions for the language model
+            max_tool_iterations: Safety cap on the internal tool-call loop; a
+                model that keeps requesting tools beyond this raises RuntimeError.
         """
         super().__init__(name, llm, node_prompt)
         self.child = None
         self.tool_available = False
+        self.max_tool_iterations = max_tool_iterations
 
     def __call__(self, state):
         """
@@ -65,8 +69,14 @@ class AgentNode(Node):
         new_log.append(f'{self.name}:{response.content}')
 
         if self.tool_available:
-            # TODO(Phase 2): add a configurable max-iterations guard to this loop.
+            iterations = 0
             while isinstance(new_messages[-1], AIMessage) and getattr(new_messages[-1], "tool_calls", None):
+                if iterations >= self.max_tool_iterations:
+                    raise RuntimeError(
+                        f"{self.name} exceeded max_tool_iterations={self.max_tool_iterations}; "
+                        "the model kept requesting tools without finishing."
+                    )
+                iterations += 1
                 ai_message = new_messages[-1]
                 for tool_call in ai_message.tool_calls:
                     tool_result = self.tools_by_name[tool_call["name"]].invoke(

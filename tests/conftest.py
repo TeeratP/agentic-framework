@@ -24,14 +24,17 @@ class FakeLLM:
     survives the wrapping that AgentNode/DecisionNode perform.
     """
 
-    def __init__(self, responses=None, structured_value=None):
+    def __init__(self, responses=None, structured_value=None, repeat=False):
         self._responses = list(responses or [])
         self._i = 0
         self._structured_value = structured_value
+        self._repeat = repeat  # when True, keep returning the last response
 
     def invoke(self, messages):
         if self._structured_value is not None:
             return _Structured(self._structured_value)
+        if self._repeat and self._i >= len(self._responses):
+            return self._responses[-1]
         resp = self._responses[self._i]
         self._i += 1
         return resp

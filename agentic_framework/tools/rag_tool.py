@@ -1,24 +1,64 @@
-# import os
-# import asyncio
-# from langchain_chroma import Chroma
-# from langchain.tools import StructuredTool
+"""
+RAG (retrieval-augmented generation) tooling for the Agentic Framework.
 
-# class ChromaDB:
-#     def __init__(self, db_dir, collection_name, llm_emb):
-#         self.db_dir = db_dir
-#         self.collection_name = collection_name
-#         self.llm_emb = llm_emb
-        
-#         # Create a new Chroma database if one does not already exist
-#         if not os.path.exists(db_dir):
-#             os.makedirs(db_dir)
-#             self.db = Chroma(collection_name=collection_name, embedding_function=llm_emb, persist_directory=db_dir)
-#         else:
-#             self.db = Chroma(collection_name=collection_name, persist_directory=db_dir)
-            
-#     def add_doc(self, docs):
-#         asyncio.run(self._add_doc_async(docs))
-    
-#     async def _add_doc_async(self, docs):
-#         for doc in docs:
-#             await self.db.aadd_document(doc)
+`make_retriever_tool` wraps any LangChain retriever (anything exposing
+`.invoke(query)` returning documents) as a StructuredTool that an AgentNode can
+bind via `agent.bind_tools([tool])`. `ChromaRAG` is a thin convenience around a
+Chroma vector store; its import of `langchain_chroma` is lazy so this module
+imports fine without the optional `rag` dependency installed.
+"""
+
+from langchain.tools import StructuredTool
+
+
+def _format_docs(docs) -> str:
+    return "\n\n".join(getattr(d, "page_content", str(d)) for d in docs)
+
+
+def make_retriever_tool(retriever,
+                        name: str = "search_documents",
+                        description: str = "Search the knowledge base for relevant context.") -> StructuredTool:
+    """Wrap a LangChain retriever as a StructuredTool bindable to an AgentNode.
+
+    Args:
+        retriever: Any object with `.invoke(query)` returning a list of documents.
+        name: Tool name exposed to the model.
+        description: Tool description exposed to the model.
+    """
+
+    def search(query: str) -> str:
+        return _format_docs(retriever.invoke(query))
+
+    return StructuredTool.from_function(func=search, name=name, description=description)
+
+
+class ChromaRAG:
+    """Convenience wrapper around a Chroma vector store.
+
+    Requires the optional `rag` extra: `pip install -e .[rag]`.
+    """
+
+    def __init__(self, embeddings, collection_name: str = "agentic", persist_directory=None):
+        from langchain_chroma import Chroma  # lazy import: optional dependency
+        self.store = Chroma(
+            collection_name=collection_name,
+            embedding_function=embeddings,
+            persist_directory=persist_directory,
+        )
+
+    def add_texts(self, texts, metadatas=None):
+        return self.store.add_texts(texts, metadatas=metadatas)
+
+    def add_documents(self, documents):
+        return self.store.add_documents(documents)
+
+    def as_retriever(self, **kwargs):
+        return self.store.as_retriever(**kwargs)
+
+    def as_tool(self,
+                name: str = "search_documents",
+                description: str = "Search the knowledge base for relevant context.",
+                **retriever_kwargs) -> StructuredTool:
+        return make_retriever_tool(
+            self.as_retriever(**retriever_kwargs), name=name, description=description
+        )

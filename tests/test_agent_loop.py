@@ -1,5 +1,6 @@
 """AgentNode tool-call loop accumulates one delta and does not mutate input state."""
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from agentic_framework.nodes import AgentNode
@@ -36,6 +37,16 @@ def test_no_tools_returns_single_message_delta(t):
     delta = node({"messages": [HumanMessage(content="hi")], "log": [], "decision": ""})
     assert delta["messages"] == [final]
     assert delta["log"] == ["agent:hello"]
+
+
+def test_tool_loop_respects_max_iterations(t):
+    tc = t.tool_call_msg("double", {"x": 1})
+    node = AgentNode(name="agent", llm=t.FakeLLM(responses=[tc], repeat=True),
+                     node_prompt="p", max_tool_iterations=3)
+    node.bind_tools([double])
+    state = {"messages": [HumanMessage(content="go")], "log": [], "decision": ""}
+    with pytest.raises(RuntimeError, match="max_tool_iterations"):
+        node(state)
 
 
 def test_missing_messages_key_raises(t):

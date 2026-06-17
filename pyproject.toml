@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-framework"
+version = "0.1.0"
+description = "A declarative DSL over LangGraph for building agent workflows."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "langgraph>=0.2.60,<0.3",
+    "langchain>=0.3,<0.4",
+    "langchain-core>=0.3,<0.4",
+    "pydantic>=2,<3",
+]
+
+[project.optional-dependencies]
+# Convenience LLM provider used by the examples/notebook.
+openai = ["langchain-openai>=0.2,<0.3", "python-dotenv>=1.0"]
+# Retrieval (ChromaRAG); the rag_tool core works with any retriever without this.
+rag = ["langchain-chroma>=0.1"]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["agentic_framework*"]
+exclude = ["tests*"]

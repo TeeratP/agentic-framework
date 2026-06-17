@@ -15,52 +15,65 @@ class AgenticGraph(StateGraph):
     agent-based workflows.
     """
     
-    def __init__(self, state: MessagesState, start_node, end_nodes, name: str = 'graph') -> None:
+    def __init__(self, state: MessagesState, start_node, end_nodes, name: str = 'graph',
+                 checkpointer=None) -> None:
         """
         Initialize the AgenticGraph.
-        
+
         Args:
             start_node: The initial node in the graph
             end_nodes: Set of nodes that represent terminal states
+            checkpointer: Optional LangGraph checkpointer (e.g. MemorySaver).
+                Required for InputNode interrupt/resume. When set, every invoke
+                must pass a config with a ``thread_id``.
         """
         super().__init__(state)
-        
+
         self.name = name
         self.start_node = start_node
         self.end_nodes = end_nodes if isinstance(end_nodes, (list, tuple, set)) else [end_nodes]
         self.child = None
-        
+        self.checkpointer = checkpointer
+
         self._seen_nodes: dict = {}
         self.build_graph()
-        self.compiled_graph = self.compile()
+        self.compiled_graph = self.compile(checkpointer=checkpointer)
         
     def build_graph(self) -> None:
         """Build the graph structure starting from the start node."""
         self._build_graph(self.start_node, START)
         
-    def __call__(self, state):
+    def __call__(self, state, config=None):
         """
         Process the current state through the graph.
-        
+
         Args:
-            state: Current conversation state containing message history
-            
+            state: Initial state, or a ``Command`` (e.g. ``Command(resume=...)``)
+                to resume an interrupted run.
+            config: Optional LangGraph config, e.g.
+                ``{"configurable": {"thread_id": "abc"}}`` (required when a
+                checkpointer is set).
+
         Returns:
             Updated state after processing through the graph
         """
-        return self.compiled_graph.invoke(state)
-    
-    def invoke(self, state):
+        return self.compiled_graph.invoke(state, config=config)
+
+    def invoke(self, state, config=None):
         """
         Process the current state through the graph.
-        
+
         Args:
-            state: Current conversation state containing message history
-            
+            state: Initial state, or a ``Command`` (e.g. ``Command(resume=...)``)
+                to resume an interrupted run.
+            config: Optional LangGraph config, e.g.
+                ``{"configurable": {"thread_id": "abc"}}`` (required when a
+                checkpointer is set).
+
         Returns:
             Updated state after processing through the graph
         """
-        return self.compiled_graph.invoke(state)
+        return self.compiled_graph.invoke(state, config=config)
         
     def compile(self, checkpointer = None, *, store = None, interrupt_before = None, interrupt_after = None, debug = False):
         return super().compile(checkpointer, store=store, interrupt_before=interrupt_before, interrupt_after=interrupt_after, debug=debug)
