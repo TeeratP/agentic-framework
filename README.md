@@ -1,8 +1,13 @@
 # Agentic Framework
 
-A thin, declarative DSL over [LangGraph](https://langchain-ai.github.io/langgraph/) for building agent workflows. You instantiate `Node` objects, wire them with the `>` operator, and hand the start/end nodes to `AgenticGraph`, which compiles down to a native LangGraph `StateGraph`.
+**Build LLM agent graphs declaratively — wire nodes with a single `>` operator that compiles to a native LangGraph `StateGraph`.**
 
-The value-add over raw LangGraph is the **`>` wiring syntax** and a small set of node abstractions: an automatic tool-call loop, structured-output routing, resumable human-in-the-loop, and reducer-based state. Because it compiles to plain LangGraph, you keep checkpointing, streaming, and LangSmith tracing for free.
+![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
+![LangGraph](https://img.shields.io/badge/LangGraph-1.0-orange)
+![tests](https://img.shields.io/badge/tests-33%20passing-green)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+Wiring agent graphs in raw LangGraph is verbose, imperative boilerplate: `add_node`, `add_edge`, `add_conditional_edges`, route functions, structured-output plumbing. This framework replaces that with a declarative `>` DSL and a handful of well-chosen node abstractions — an automatic tool-call loop, structured-output routing, and resumable human-in-the-loop. It compiles to a plain LangGraph `StateGraph`, so checkpointing, streaming, and LangSmith tracing come for free.
 
 ```python
 randomizer > classifier
@@ -10,37 +15,40 @@ classifier["positive"] > positive_handler
 classifier["negative"] > negative_handler
 ```
 
-That's the whole mental model: `>` builds a graph, branches index by choice.
+That's the whole mental model: `>` builds the graph, and branches index by choice.
 
-## Features
+## The quickstart graph
 
-- **`>` wiring DSL** — build graphs by writing `a > b`; branches index by choice (`decision["x"] > handler`). Compiles to a native LangGraph `StateGraph`.
-- **Automatic tool-call loop** — `AgentNode.bind_tools([fn])` wraps bare callables as `StructuredTool`s and runs the call/respond loop for you (capped by `max_tool_iterations`).
-- **Structured-output routing** — `DecisionNode` constrains the LLM to a `Literal` of your choice names, so it can only return a valid branch; the label lands in a dedicated `decision` field, never in `messages`.
-- **Resumable human-in-the-loop** — `InputNode` uses LangGraph's `interrupt()`; resume with a `checkpointer` + `Command(resume=...)`.
-- **Reducer-based state** — deltas merged by `add_messages` / `operator.add`, which keeps checkpointing, parallel branches, and subgraph composition correct.
-- **Graphs as nodes** — an `AgenticGraph` can be embedded inside another (`graph_0 > graph_1`).
-- **RAG helpers** — `make_retriever_tool` wraps any LangChain retriever; `ChromaRAG` is an optional Chroma convenience.
-- **Per-node knobs** — `cache_ttl`, `retry`, and `reasoning_effort` (gpt-5.x) per node.
-- **Free LangGraph plumbing** — streaming (`stream`/`astream`), async (`ainvoke`/`astream`), `durability`, and LangSmith tracing, because it's plain LangGraph underneath.
+```mermaid
+graph TD
+    START([START]) --> R["randomizer<br/>AgentNode + random_number tool"]
+    R --> C{"classifier<br/>DecisionNode"}
+    C -->|positive| P["positive_handler<br/>AgentNode"]
+    C -->|negative| N["negative_handler<br/>AgentNode"]
+    P --> END([END])
+    N --> END([END])
+```
 
-## How it works
+The randomizer calls a Python tool, the classifier routes on the result via constrained structured output, and one of two handlers produces the final reply — all wired with `>` (full runnable source in [`examples/sample_usage.py`](examples/sample_usage.py)).
 
-1. **Wiring is deferred.** `a > b` just sets `a.child = b` and returns `b`, so chains like `a > b > c` build a linked list in memory — no edges exist yet.
-2. **`AgenticGraph(...)` materializes the graph.** At construction it walks the `.child` pointers, emits the real LangGraph `add_node`/`add_edge` calls, and `compile()`s. The graph is frozen at build time.
-3. **Termination is explicit.** Nodes you pass in `end_nodes` get an edge to `END`; everything else recurses into its `.child`.
-4. **Loops are allowed.** Revisited nodes are short-circuited by name, so cycles (e.g. a research loop) just work. Node names must be unique within a graph.
-5. **Decision nodes route by structured output.** `decision["positive"] > handler` sets the branch; the LLM is wrapped with `with_structured_output` over a `Literal` of the choice names, so it can only return a valid choice. The label is written to a dedicated `decision` state field — it never pollutes `messages`.
+## Design decisions
+
+The framework is small on purpose; the value is in a few load-bearing choices.
+
+- **Deferred wiring, then compile-once.** `a > b` only sets `a.child = b` and returns `b`, so `a > b > c` builds a linked list in memory with no edges yet. `AgenticGraph(...)` walks the `.child` pointers once at construction, emits the real `add_node`/`add_edge` calls, and `compile()`s. The graph is frozen at build time — wiring bugs surface immediately, not mid-run. Revisited nodes are short-circuited by name, so cycles (research loops) just work; names must be unique.
+- **Reducer-based state deltas.** Nodes return *only the keys they change* and never mutate state in place; LangGraph reducers (`add_messages`, `operator.add`) merge those deltas. This is what keeps checkpointing, parallel-branch merges, and subgraph composition correct rather than racy.
+- **Routing constrained to a `Literal`.** `DecisionNode` wraps the LLM with `with_structured_output` over a Pydantic model whose field is `Literal[*choices]`, so the model can *only* return a valid branch name — no invalid-state routing bugs. The label lands in a dedicated `decision` field and never pollutes `messages`.
+- **Compiles to plain LangGraph — no lock-in.** `AgenticGraph` *is* a `StateGraph` subclass. You get the whole LangGraph ecosystem (streaming, async, durability, LangSmith, checkpointers) underneath, and can drop down to it anytime.
 
 ## Install
 
-Requires **Python ≥ 3.10**. Core deps are LangGraph ≥ 1.0, LangChain-core ≥ 1.0, and Pydantic 2.
+Requires **Python ≥ 3.10**. Core deps: LangGraph ≥ 1.0, langchain-core ≥ 1.0, Pydantic 2.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e .                 # core
-pip install -e ".[openai]"       # + langchain-openai & python-dotenv (for the example/notebook)
-pip install -e ".[rag]"          # + langchain-chroma (for ChromaRAG)
+pip install -e ".[openai]"       # + langchain-openai & python-dotenv (example/notebook)
+pip install -e ".[rag]"          # + langchain-chroma (ChromaRAG)
 pip install -e ".[dev]"          # + pytest
 ```
 
@@ -48,7 +56,7 @@ For live model calls, copy `.env.example` to `.env` and set `OPENAI_API_KEY`.
 
 ## Quickstart
 
-A tool call → decision → branch graph, wired entirely with `>` (full runnable version in [`examples/sample_usage.py`](examples/sample_usage.py)):
+A tool call → decision → branch graph, wired entirely with `>`:
 
 ```python
 import random
@@ -68,7 +76,7 @@ def random_number(maximum: int) -> int:
 llm = ChatOpenAI(model="gpt-5.4-nano")
 
 # An agent that can call a tool. bind_tools wraps the bare function as a
-# StructuredTool and runs the tool-call loop automatically.
+# StructuredTool and runs the call/respond loop automatically.
 randomizer = AgentNode(
     name="randomizer",
     llm=llm,
@@ -112,25 +120,25 @@ for line in result["log"]:          # per-node + tool-call trace
 
 ## Node types
 
-All nodes are callables (`__call__(state) -> delta`) invoked by LangGraph with the shared state. They return **only the keys they update** — the reducers merge them; nodes never mutate state in place.
+All nodes are callables (`__call__(state) -> delta`) invoked by LangGraph with the shared state. They return **only the keys they update**; reducers merge them.
 
 | Node | Purpose |
 |------|---------|
-| **`AgentNode`** | Prepends its `node_prompt` as a `SystemMessage`, calls the LLM, returns a delta. `bind_tools(...)` wraps bare callables and runs an internal tool-call loop (capped by `max_tool_iterations`, default 25), accumulating every message produced this turn into one delta. A non-default `output_field` writes the final response *content* to that key instead of `messages` (transform nodes). Optional `reasoning_effort` (`"low"`/`"medium"`/`"high"`) is passed per-call for gpt-5.x. |
-| **`DecisionNode`** | Branching only. Reads from `input_field`, writes its choice to the `decision` field, and routes via conditional edges. Wired by indexing a choice (`decision["x"] > handler`); `decision > x` is an error. |
+| **`AgentNode`** | Prepends its `node_prompt` as a `SystemMessage`, calls the LLM, returns a delta. `bind_tools(...)` wraps bare callables as `StructuredTool`s and runs an internal tool-call loop (capped by `max_tool_iterations`, default 25), accumulating every message produced this turn into one delta. A non-default `output_field` writes the final response *content* to that key instead of `messages` (transform nodes). Optional `reasoning_effort` (`"low"`/`"medium"`/`"high"`) is passed per-call for gpt-5.x. |
+| **`DecisionNode`** | Branching only. Reads from `input_field`, writes its choice to `decision`, routes via conditional edges. Wired by indexing a choice (`decision["x"] > handler`); `decision > x` is an error. |
 | **`InputNode`** | Human-in-the-loop via LangGraph's `interrupt()`. Resumes when the graph is built with a `checkpointer` and invoked with a `thread_id`, via `Command(resume=value)`. |
 
-All node types also accept `cache_ttl` (LangGraph `CachePolicy`) and `retry` (LangGraph `RetryPolicy`); `AgenticGraph` auto-provides an `InMemoryCache` when any node sets `cache_ttl`.
+All node types also accept `cache_ttl` (LangGraph `CachePolicy`) and `retry` (LangGraph `RetryPolicy`); `AgenticGraph` auto-provides an `InMemoryCache` when any node sets `cache_ttl`. An `AgenticGraph` can itself be embedded as a node in a larger graph (`graph_0 > graph_1`), and RAG helpers (`make_retriever_tool`, optional `ChromaRAG`) wrap any LangChain retriever as a bindable tool.
 
 ## State
 
-`AgenticState` is a `TypedDict` with reduced channels:
+`AgenticState` is a `TypedDict` of reduced channels:
 
 - **`messages`** — `add_messages` reducer: appends, replaces by matching `id`, coerces bare strings to `HumanMessage`, and merges parallel branches.
 - **`log`** — `operator.add`: every node appends a trace line (`"{name}:{content}"`, tool calls, decisions). Seed it with `[]` on invoke to capture the trace.
 - **`decision`** — transient routing key written by `DecisionNode`, read by its `route()`.
 
-Reducer-based deltas are what make checkpointing, parallel branches, and subgraph composition correct. Custom schemas just add more reduced channels (e.g. a `summary` field for an `output_field` node).
+Custom schemas just add more reduced channels (e.g. a `summary` field for an `output_field` transform node).
 
 ## Running it
 
@@ -139,17 +147,15 @@ python -m pytest tests/            # full suite, no API calls (a scripted FakeLL
 python examples/sample_usage.py    # live end-to-end demo (needs OPENAI_API_KEY)
 ```
 
-The 33-test suite covers state reducers, graph construction, routing, the tool-call loop, interrupt/resume, RAG tool wiring, streaming/async, configurable fields, and node caching/retry/`reasoning_effort`/`durability`.
+The **33-test** suite covers state reducers, graph construction, routing, the tool-call loop, interrupt/resume, RAG tool wiring, streaming/async, configurable fields, and node caching/retry/`reasoning_effort`/`durability`.
 
 ## Limitations
+
+Kept honest on purpose:
 
 - **Async is graph-level only.** `ainvoke`/`astream` run the sync nodes in LangGraph's threadpool; true per-node async LLM calls aren't implemented (which is also why a per-node `timeout` isn't exposed — LangGraph only times out async nodes).
 - **`reasoning_effort` is `AgentNode`-only** — it conflicts with `DecisionNode`'s structured output on current OpenAI models.
 - **`ChromaRAG` is untested end-to-end** — only `make_retriever_tool` is covered (against a fake retriever); the live Chroma path needs real embeddings.
-
-## Composition & graphs as nodes
-
-An `AgenticGraph` can itself be a node inside a larger `AgenticGraph` — `graph_0 > graph_1` wires them, and the parent graph embeds the child's compiled graph. Run any graph via `invoke` / `stream` / `ainvoke` / `astream` (all accept an optional LangGraph `config` and `durability`). Pass `checkpointer=...` to enable `InputNode` interrupt/resume.
 
 ## Project layout
 
@@ -163,10 +169,9 @@ agentic_framework/
 examples/sample_usage.py
 tests/                # pytest suite (no live API calls)
 docs/project.md       # living notes: setup, status, roadmap, rough edges
-CLAUDE.md             # stable architecture & conventions
 ```
 
-See [`docs/project.md`](docs/project.md) for setup details, current status, and the roadmap, and [`CLAUDE.md`](CLAUDE.md) for the architecture in depth.
+See [`docs/project.md`](docs/project.md) for setup, status, and roadmap, and [`CLAUDE.md`](CLAUDE.md) for the architecture in depth.
 
 ## License
 
