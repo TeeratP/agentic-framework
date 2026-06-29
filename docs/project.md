@@ -67,6 +67,7 @@ Phases 1–4 are complete on branch `roadmap/phases-1-3` (LangGraph 1.0 / LangCh
 ## Recent changes
 
 <!-- AUTO-MAINTAINED by .githooks/post-commit — newest first, max 15 bullets -->
+- 63b6e53 2026-06-29 — Stop tracking `.gitignore` (kept local per request); also ignore the personal `example.ipynb` scratch notebook
 - e5ac44c 2026-06-20 — Rewrite README as a portfolio-grade showcase: tagline + badges, problem→solution value prop, a Mermaid diagram of the example graph, and a "Design decisions" section (all claims verified against source)
 - 842f24e 2026-06-20 — Expand README with a Features list, surface the 33-test suite count, and add a Limitations section (docs only, grounded in existing code)
 - 0822000 2026-06-20 — Rewrite README as a finished project (accurate LangGraph 1.0 feature set, `>` DSL/InputNode/RAG/caching) + add MIT LICENSE for the now-public repo
