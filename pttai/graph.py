@@ -32,6 +32,42 @@ def _augment_schema(base, extra_keys):
     return TypedDict(f"{base.__name__}Plus", hints)
 
 
+_UNSET = object()  # sentinel: "no positional input given"
+
+
+def _normalize_input(input=_UNSET, *, message=None, **extra):
+    """Coerce a run-method input into a full state dict and auto-seed boilerplate.
+
+    Source of the input is either the positional ``input`` or the keyword
+    ``message`` (str | list of messages) — supplying both is an error.
+
+    - ``str``  -> ``{"messages": [HumanMessage(content=input)]}``
+    - ``list`` -> ``{"messages": list(input)}`` (a list of messages)
+    - ``dict`` -> a shallow copy (the full-state form; behaves as before)
+    Any ``**extra`` keys are merged in as additional state entries. Finally the
+    reduced channels that need an empty start are seeded if absent (at minimum
+    ``log: []``). Anything that is not str/list/dict (e.g. a ``Command`` resume)
+    is passed through untouched so interrupt/resume keeps working.
+    """
+    if input is not _UNSET and message is not None:
+        raise ValueError("pass either a positional input or message=, not both")
+    if input is _UNSET:
+        if message is None:
+            raise ValueError("provide a positional input or message=")
+        input = message
+    if isinstance(input, str):
+        state = {"messages": [HumanMessage(content=input)]}
+    elif isinstance(input, list):
+        state = {"messages": list(input)}
+    elif isinstance(input, dict):
+        state = dict(input)
+    else:
+        return input  # Command(resume=...) or other native input — pass through
+    state.update(extra)
+    state.setdefault("log", [])
+    return state
+
+
 def _make_send_fn(worker, field):
     """Conditional-edge function: fan one Send per item of state[field] to the
     worker. Each Send carries a COMPLETE 1-item input state for that invocation."""
@@ -166,37 +202,51 @@ class AgenticGraph(StateGraph):
         """
         return self.compiled_graph.invoke(state, config=config, durability=durability)
 
-    def invoke(self, state, config=None, durability=None):
+    def invoke(self, input=_UNSET, /, *, message=None, config=None, durability=None, **extra):
         """
-        Process the current state through the graph.
+        Process an input through the graph.
 
         Args:
-            state: Initial state, or a ``Command`` (e.g. ``Command(resume=...)``)
-                to resume an interrupted run.
+            input: A plain ``str`` (wrapped to a ``HumanMessage`` on ``messages``),
+                a ``list`` of messages (placed on ``messages``), a full state
+                ``dict`` (used as-is, back-compat), or a ``Command``
+                (e.g. ``Command(resume=...)``) to resume an interrupted run. For
+                the str/list/dict forms, boilerplate channels are auto-seeded
+                (at minimum ``log: []``).
+            message: Keyword form of the str/list shorthand, e.g.
+                ``invoke(message="hi")``. Mutually exclusive with a positional
+                ``input`` (passing both raises ValueError).
             config: Optional LangGraph config, e.g.
                 ``{"configurable": {"thread_id": "abc"}}`` (required when a
                 checkpointer is set).
+            **extra: Additional state keys to seed alongside the shorthand input,
+                e.g. ``invoke("hi", topic="product")``.
 
         Returns:
             Updated state after processing through the graph
         """
-        return self.compiled_graph.invoke(state, config=config, durability=durability)
+        return self.compiled_graph.invoke(
+            _normalize_input(input, message=message, **extra), config=config, durability=durability)
 
-    def stream(self, state, config=None, durability=None, **kwargs):
+    def stream(self, input=_UNSET, /, *, message=None, config=None, durability=None, **extra):
         """
         Stream graph execution, yielding updates as nodes complete.
 
-        Passes through to the compiled graph's stream (default mode='updates').
+        Normalizes ``input``/``message`` like ``invoke`` (str/list/dict/Command +
+        ``**extra`` state keys), then passes through to the compiled graph's stream.
         """
-        return self.compiled_graph.stream(state, config=config, durability=durability, **kwargs)
+        return self.compiled_graph.stream(
+            _normalize_input(input, message=message, **extra), config=config, durability=durability)
 
-    async def ainvoke(self, state, config=None, durability=None):
+    async def ainvoke(self, input=_UNSET, /, *, message=None, config=None, durability=None, **extra):
         """Async variant of invoke. Sync nodes run in LangGraph's threadpool."""
-        return await self.compiled_graph.ainvoke(state, config=config, durability=durability)
+        return await self.compiled_graph.ainvoke(
+            _normalize_input(input, message=message, **extra), config=config, durability=durability)
 
-    async def astream(self, state, config=None, durability=None, **kwargs):
+    async def astream(self, input=_UNSET, /, *, message=None, config=None, durability=None, **extra):
         """Async streaming variant of stream."""
-        async for chunk in self.compiled_graph.astream(state, config=config, durability=durability, **kwargs):
+        async for chunk in self.compiled_graph.astream(
+                _normalize_input(input, message=message, **extra), config=config, durability=durability):
             yield chunk
 
     def compile(self, checkpointer = None, *, cache = None, store = None, interrupt_before = None, interrupt_after = None, debug = False):
