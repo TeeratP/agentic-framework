@@ -1,7 +1,7 @@
 """
 Agent node implementation for the Agentic Framework.
 """
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict, Union
 from pttai.node import Node
 from pttai.nodes._fields import partition_reads
 from pttai.state import merge_token_usage
@@ -45,7 +45,7 @@ class AgentNode(Node):
                  input_field: str = "messages",
                  output_field: str = "messages",
                  reads: Optional[List[str]] = None,
-                 writes: Optional[List[str]] = None,
+                 writes: Optional[Union[List[str], Dict[str, type]]] = None,
                  reasoning_effort: Optional[str] = None,
                  cache_ttl: Optional[int] = None,
                  retry: bool = False) -> None:
@@ -69,10 +69,15 @@ class AgentNode(Node):
                 (concatenated in order), anything else is a scalar interpolated
                 into node_prompt via .format_map. Use reads OR input_field.
             writes: State keys this node writes (multi-key form; back-compat
-                generalization of output_field). ["messages"] appends to the
-                conversation; a single scalar key writes the final response
-                content; two or more scalar keys switch to structured output (a
-                str field per key, no tool loop). Use writes OR output_field.
+                generalization of output_field). Accepts either a list[str] or a
+                dict[str, type]. ["messages"] appends to the conversation; a
+                single scalar key (list form) writes the final response content;
+                two or more scalar keys switch to structured output (one field
+                per key, no tool loop). A dict[str, type] ALWAYS uses structured
+                output (even for one key) and types each field as given, so the
+                node returns NATIVE-typed values (e.g. {"score": int} -> 9, an
+                int) instead of all-str. A list[str] types every field as str.
+                Use writes OR output_field.
             reasoning_effort: Reasoning effort for reasoning-capable models
                 (e.g. "low"/"medium"/"high" on gpt-5.x). Passed as a per-call
                 kwarg to the LLM. (DecisionNode does not expose this — reasoning
@@ -86,13 +91,30 @@ class AgentNode(Node):
         self.output_field = output_field
         # reads/writes win if both forms are given (document: use one or the other).
         self.reads = reads if reads is not None else [input_field]
-        self.writes = writes if writes is not None else [output_field]
+        # Normalize writes to a {key: type} map. A dict is supplied verbatim and
+        # marks "typed/structured" mode (always structured, even for one key); a
+        # list becomes {key: str} and keeps the count-based behavior (single
+        # scalar -> content write, >=2 -> all-str structured). self.writes stays
+        # a dict whose KEYS are the write keys, so graph.py's set(node.writes)
+        # key-extraction keeps working unchanged.
+        writes = writes if writes is not None else [output_field]
+        self._writes_typed = isinstance(writes, dict)
+        self.writes = dict(writes) if self._writes_typed else {k: str for k in writes}
         self.reasoning_effort = reasoning_effort
         # Per-call kwarg (survives bind_tools, unlike a pre-bound reasoning_effort).
         self._invoke_kwargs = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
         # OpenAI prompt-cache routing — set by AgenticGraph when prompt_cache=True.
         self._prompt_cache_enabled = False
         self._prompt_cache_key = None
+
+    def _is_structured(self, scalar_writes) -> bool:
+        """Whether this node uses structured/typed output for ``scalar_writes``.
+
+        Two or more scalar keys always go structured (today's rule). A dict-form
+        ``writes`` ("typed" mode) goes structured even for a single key; a
+        list-form single scalar key keeps the .content-write behavior.
+        """
+        return len(scalar_writes) >= 2 or (self._writes_typed and len(scalar_writes) >= 1)
 
     def __call__(self, state):
         """
@@ -132,13 +154,12 @@ class AgentNode(Node):
 
         prompt = [SystemMessage(content=sys)] + history
 
-        # >=2 scalar writes -> structured output (str field per key, no tool loop,
-        # no reasoning_effort — mirrors DecisionNode).
-        # ponytail: all structured fields are typed `str` in v1; a future
-        # `output_model: type[BaseModel]` param is the escape hatch for
-        # typed/nested output — not built now.
-        if len(scalar_writes) >= 2:
-            Model = create_model("Out", **{w: (str, ...) for w in scalar_writes})
+        # Structured output (one field per key, no tool loop, no reasoning_effort
+        # — mirrors DecisionNode). List-form fields are typed `str`; dict-form
+        # ("typed") fields carry the user-declared Python type so values come
+        # back NATIVE (int/bool/list/...), not stringified.
+        if self._is_structured(scalar_writes):
+            Model = create_model("Out", **{w: (self.writes[w], ...) for w in scalar_writes})
             out = self.llm.with_structured_output(Model).invoke(prompt)
             values = {w: getattr(out, w) for w in scalar_writes}
             return values | {"log": [f"{self.name}:{values}"]}
@@ -199,7 +220,7 @@ class AgentNode(Node):
             tools: list of tools to bind to the agent node
         """
         # Structured output preempts the free-form tool loop on OpenAI/LangGraph.
-        if len([w for w in self.writes if w != "messages"]) >= 2:
+        if self._is_structured([w for w in self.writes if w != "messages"]):
             raise ValueError(
                 "multi-field structured output (writes=[...]) cannot be combined "
                 "with bind_tools in v1")

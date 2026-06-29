@@ -91,3 +91,57 @@ def test_mixed_messages_and_scalar_writes_raises(t):
                      node_prompt="p", writes=["messages", "x"])
     with pytest.raises(ValueError, match="not both"):
         node({"messages": [HumanMessage(content="hi")], "log": []})
+
+
+# --- typed writes (dict[str, type]) ---------------------------------------
+
+class TypedState(TypedDict):
+    messages: Annotated[list[AnyMessage], add_messages]
+    log: Annotated[list[str], operator.add]
+    a: int
+    b: bool
+
+
+def test_typed_dict_write_roundtrips_native_types(t):
+    # FakeLLM scripts native int/bool through with_structured_output ->
+    # SimpleNamespace, so getattr returns the real types, not strings.
+    llm = t.FakeLLM(structured_value={"a": 7, "b": True})
+    node = AgentNode(name="n", llm=llm, node_prompt="p", writes={"a": int, "b": bool})
+    delta = node({"messages": [HumanMessage(content="hi")], "log": []})
+    assert delta["a"] == 7 and isinstance(delta["a"], int)
+    assert delta["b"] is True
+    assert "messages" not in delta and "log" in delta
+
+
+def test_typed_dict_write_e2e_through_graph(t):
+    n = AgentNode(name="n", llm=t.FakeLLM(structured_value={"a": 9, "b": False}),
+                  node_prompt="p", writes={"a": int, "b": bool})
+    g = AgenticGraph(state=TypedState, start_node=n, end_nodes=n)
+    out = g.invoke({"messages": [HumanMessage(content="hi")], "log": [], "a": 0, "b": True})
+    assert out["a"] == 9 and isinstance(out["a"], int)
+    assert out["b"] is False
+
+
+def test_list_writes_still_yield_strings(t):
+    # list[str] form unchanged: both fields typed str.
+    n = AgentNode(name="n", llm=t.FakeLLM(structured_value={"a": "1", "b": "2"}),
+                  node_prompt="p", writes=["a", "b"])
+    assert n.writes == {"a": str, "b": str}
+    delta = n({"messages": [HumanMessage(content="hi")], "log": []})
+    assert delta["a"] == "1" and delta["b"] == "2"
+
+
+def test_single_key_dict_uses_structured_mode(t):
+    # A 1-key dict forces structured/typed mode (vs list-of-one .content write).
+    llm = t.FakeLLM(structured_value={"x": 42})
+    node = AgentNode(name="n", llm=llm, node_prompt="p", writes={"x": int})
+    delta = node({"messages": [HumanMessage(content="hi")], "log": []})
+    assert delta["x"] == 42 and isinstance(delta["x"], int)
+    assert "messages" not in delta
+
+
+def test_typed_dict_write_with_tools_raises(t):
+    node = AgentNode(name="n", llm=t.FakeLLM(responses=[t.ai("x")]),
+                     node_prompt="p", writes={"x": int})
+    with pytest.raises(ValueError, match="bind_tools"):
+        node.bind_tools([double])
