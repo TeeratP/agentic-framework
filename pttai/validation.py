@@ -127,7 +127,15 @@ def compute_availability(initial, edges, writes, send_workers=None, spread_colle
     may[START] = set(initial)
     must[START] = set(initial)
 
-    for _ in range(len(all_keys) + 2):
+    # Iterate to a TRUE fixpoint: keep sweeping until a full pass changes
+    # nothing. The safety cap is len(real_nodes) — the longest dependency chain
+    # a key can travel is bounded by the node count, so that many sweeps always
+    # suffice. (The old fixed bound of len(all_keys)+2 under-converged when a
+    # graph had more nodes than distinct state keys — the common case, since
+    # many nodes share `messages` — and set-hash iteration order is not
+    # topological, so a key produced early but read far downstream needs up to
+    # path-length sweeps.)
+    for _ in range(max(len(real), 1)):
         changed = False
         for n in real:
             if n in send_workers:                       # Send worker: payload only

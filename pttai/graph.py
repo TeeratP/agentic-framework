@@ -117,7 +117,7 @@ class AgenticGraph(StateGraph):
     agent-based workflows.
     """
     
-    def __init__(self, state=None, start_node=None, end_nodes=None, name: str = 'graph',
+    def __init__(self, state=None, start_node=None, end_nodes=None, name: "str | None" = None,
                  checkpointer=None, cache=None, validate: bool = True,
                  inputs=None, prompt_cache: bool = False,
                  prompt_cache_key: "str | None" = None) -> None:
@@ -162,6 +162,20 @@ class AgenticGraph(StateGraph):
             state = AgenticState
         self.start_node = start_node
         self.end_nodes = end_nodes if isinstance(end_nodes, (list, tuple, set)) else [end_nodes]
+        # Subgraph naming mirrors Node.__init__: an omitted name is an AUTO base
+        # ("graph") that _resolve_names may suffix (graph, graph_1) so two unnamed
+        # subgraphs composed into a parent don't collide; an explicit name is
+        # treated as fixed and is NEVER suffixed.
+        if name is None:
+            self._name_base, self._auto_name = "graph", True
+        else:
+            self._name_base, self._auto_name = name, False
+        self.name = self._name_base
+        # Walk the whole wiring ONCE (it is frozen at construction) and cache it;
+        # _resolve_names / _check_reserved / _auto_register_keys + the unreachable
+        # check all read this instead of re-walking. Keyed by id, deterministic
+        # insertion order so name resolution stays stable.
+        self._all_nodes = self._collect_nodes(self.start_node)
         # Resolve every node's name (inferred/numbered) before anything reads it.
         self._resolve_names()
         # Forbid USER node declarations colliding with a reserved channel before
@@ -175,7 +189,9 @@ class AgenticGraph(StateGraph):
 
         super().__init__(state)
 
-        self.name = name
+        # self.name was set above (auto base "graph" or explicit); re-affirm it
+        # after super().__init__. A PARENT graph may later suffix it (graph_1).
+        self.name = self._name_base
         self.state_schema = state
         self._schema_keys = schema_keys(state)  # for invoke unknown-key guard
         self.children: list = []
@@ -387,6 +403,16 @@ class AgenticGraph(StateGraph):
             worker, field, collector = node.worker, node.field, node.collector
             if collector is None:
                 raise ValueError("worker.map(...) must be followed by `> collector`.")
+            # guard: mapping directly off a decision/condition (RouterNode) is
+            # genuinely unsupported — the router already emits its own conditional
+            # edges, so the Spread would emit a SECOND conditional edge from the
+            # same node (and the router's edge list would also choke, a Spread
+            # having no .name). Point the user at the passthrough workaround.
+            if isinstance(prev_node, RouterNode):
+                raise ValueError(
+                    f"Cannot `.map(...)` directly off a decision/condition branch "
+                    f"{prev_node_name!r}; insert an intermediate node: "
+                    f"`decision[\"x\"] > passthrough > worker.map(...)`.")
             # guard: the Spread must be the SOLE child of its predecessor
             if prev_node is not START and getattr(prev_node, "children", None) != [node]:
                 raise ValueError(
@@ -478,7 +504,7 @@ class AgenticGraph(StateGraph):
         are used when free and suffixed _1/_2 on collision; inference-failed nodes
         are numbered by traversal order. Resolves from each node's _name_base so a
         rebuild is idempotent."""
-        nodes = list(self._collect_nodes(self.start_node).values())
+        nodes = list(self._all_nodes.values())
         taken = set()
         # explicit first (reserve + detect real duplicates)
         for n in nodes:
@@ -588,7 +614,7 @@ class AgenticGraph(StateGraph):
         """
         base = schema_keys(base_state)
         writes, required_reads = set(), set()
-        for node in self._collect_nodes(self.start_node).values():
+        for node in self._all_nodes.values():
             reads, w = self._node_io(node)
             writes |= w
             required_reads |= {r for r in reads if not r.endswith("?")}
@@ -617,7 +643,7 @@ class AgenticGraph(StateGraph):
         ``node.writes``/``node.reads``, so they are not seen here — only genuine
         user declarations are."""
         guarded = RESERVED - {"messages"}
-        for node in self._collect_nodes(self.start_node).values():
+        for node in self._all_nodes.values():
             user_writes, user_reads = set(), set()
             if isinstance(node, AgentNode):
                 user_writes = set(node.writes)  # dict keys = user-declared writes
@@ -705,25 +731,41 @@ class AgenticGraph(StateGraph):
         for f, kids in adj.items():
             if len(kids) < 2:
                 continue
+            # Snapshot every branch's reachable set FIRST, then derive each
+            # branch's exclusive region by reading ONLY from that unmutated
+            # snapshot. (Writing the exclusive set back into `reach` mid-loop let
+            # a later sibling subtract an already-shrunk set, wrongly pulling a
+            # strictly-downstream join node into a branch's "exclusive" region ->
+            # a spurious concurrency pair that flagged a valid diamond.)
             reach = {c: ({c} | self._descendants(c, adj)) for c in kids}
+            exclusive = {}
             for c in kids:
                 others = set().union(*(reach[o] for o in kids if o is not c))
-                exclusive = reach[c] - others
-                reach[c] = exclusive
+                exclusive[c] = reach[c] - others
             kids_list = list(kids)
             for i in range(len(kids_list)):
                 for j in range(i + 1, len(kids_list)):
-                    for x in reach[kids_list[i]]:
-                        for y in reach[kids_list[j]]:
+                    for x in exclusive[kids_list[i]]:
+                        for y in exclusive[kids_list[j]]:
                             if x != y:
                                 pairs.add(frozenset((x, y)))
         return pairs
 
     def _reachable_from_start(self):
-        adj = {}
-        for s, d, _ in self._edges:
-            adj.setdefault(s, set()).add(d)
-        return {START} | self._descendants(START, adj)
+        """Names actually BUILT into the compiled graph — the genuine reachable
+        set. ``_seen_nodes`` is populated by ``_build_graph`` as it walks the
+        ``.child``/``.children`` / ``RouterNode.choices`` / Spread structure from
+        ``start_node`` and STOPS at end nodes, so its keys are exactly the nodes
+        that received edges. Diffing the full node universe (``_all_nodes``, which
+        also walks past end nodes and includes map workers) against this surfaces
+        collected-but-never-built orphans — e.g. a node hung off an end node's
+        children. Reusing the build's own record guarantees an EXACT mirror of the
+        build traversal, so the diff never false-positives a reachable node.
+
+        (Was dead code: the old version rebuilt adjacency from ``self._edges``,
+        which is itself emitted only by the outward build walk, so it equalled the
+        reachable set by construction and never flagged anything.)"""
+        return set(self._seen_nodes)
 
     def validate(self, strict: bool = False, *, interrupt=None) -> ValidationReport:
         """Statically check state availability; returns a ValidationReport.
@@ -760,7 +802,8 @@ class AgenticGraph(StateGraph):
             and not isinstance(node, RouterNode)
         ]
         reachable = self._reachable_from_start()
-        unreachable = [name for name in self._seen_nodes if name not in reachable]
+        unreachable = [n.name for n in self._all_nodes.values()
+                       if n.name not in reachable]
 
         issues = collect_issues(
             self.name, schema, reduced, node_io, may, must,
