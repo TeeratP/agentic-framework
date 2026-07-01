@@ -627,10 +627,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#d-duplicate-node-names" class="md-nav__link">
+  <a href="#d-duplicate-node-names-caught-by-both-frameworks-not-a-differentiator" class="md-nav__link">
     <span class="md-ellipsis">
       
-        d. Duplicate node names
+        d. Duplicate node names — caught by BOTH frameworks (not a differentiator)
       
     </span>
   </a>
@@ -756,7 +756,7 @@ returning <code>"b"</code> dead-ends at runtime — a bug that hides until that 
 </code></pre></div>
 <p>Raw LangGraph: a node with no outgoing edge and no edge to <code>END</code> is a structural
 dead-end you must remember to wire yourself.</p>
-<h3 id="d-duplicate-node-names">d. Duplicate node names<a class="headerlink" href="#d-duplicate-node-names" title="Permanent link">&para;</a></h3>
+<h3 id="d-duplicate-node-names-caught-by-both-frameworks-not-a-differentiator">d. Duplicate node names — caught by BOTH frameworks (not a differentiator)<a class="headerlink" href="#d-duplicate-node-names-caught-by-both-frameworks-not-a-differentiator" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">a</span> <span class="o">=</span> <span class="n">AgentNode</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;dup&quot;</span><span class="p">,</span> <span class="n">llm</span><span class="o">=</span><span class="n">get_llm</span><span class="p">(),</span> <span class="n">node_prompt</span><span class="o">=</span><span class="s2">&quot;one&quot;</span><span class="p">)</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">b</span> <span class="o">=</span> <span class="n">AgentNode</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;dup&quot;</span><span class="p">,</span> <span class="n">llm</span><span class="o">=</span><span class="n">get_llm</span><span class="p">(),</span> <span class="n">node_prompt</span><span class="o">=</span><span class="s2">&quot;two&quot;</span><span class="p">)</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span>
@@ -766,14 +766,20 @@ dead-end you must remember to wire yourself.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Duplicate node name &#39;dup&#39;: two distinct nodes share this name. Node names must be
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>unique within a graph.
 </code></pre></div>
-<p>Raw LangGraph: <code>add_node("dup", ...)</code> twice silently merges/overwrites — the
-second registration wins and the first node vanishes from the graph.</p>
+<p>Raw LangGraph <strong>also catches this at build</strong>: <code>add_node("dup", ...)</code> a second
+time raises <code>ValueError('Node</code>dup<code>already present.')</code>. So this class is <em>not</em> a
+pttai-only advantage — both frameworks reject it at construction. pttai's message
+is friendlier, but the guarantee is the same. (This was previously described here
+as a silent overwrite; that was wrong for LangGraph 1.0 — corrected after
+measuring it in <code>eval/bugbench/</code>.)</p>
 <blockquote>
-<p>There are more (<code>writes</code> to a key not in the schema; concurrent writes to a
-reducer-less key across parallel branches; unreachable nodes) — all in
-<code>pttai/validation.py::collect_issues</code>. The four above are the ones a LangGraph
-user hits most and the validator's clearest "you can't get this from raw
-LangGraph" hook.</p>
+<p>There are more genuine pttai-only-at-build catches (concurrent writes to a
+reducer-less key across parallel branches; a <code>node_prompt</code> placeholder with no
+matching scalar read; unreachable nodes) — all in
+<code>pttai/validation.py::collect_issues</code>, and all measured in <code>eval/bugbench/</code>. Of
+the four classes above, <strong>three (a, b, c) are caught only by pttai at build</strong>;
+raw LangGraph surfaces them at runtime (after wasting model calls) or not at
+all. Duplicate names (d) is the one caught by both.</p>
 </blockquote>
 <h2 id="2-lines-of-code-three-architectures">2. Lines of code, three architectures<a class="headerlink" href="#2-lines-of-code-three-architectures" title="Permanent link">&para;</a></h2>
 <p>Same workflow, both ways, from the runnable side-by-side files in
