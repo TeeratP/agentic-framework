@@ -1,0 +1,7 @@
+# Everything the demo needs from a fresh clone, so the one-command run works:
+#   pip install -r demo/requirements.txt && python demo/app.py
+# gradio is demo-only; langgraph/langchain-core are pttai's own runtime deps
+# (also pinned in the repo-root requirements.txt).
+gradio>=5
+langgraph>=1
+langchain-core>=1
