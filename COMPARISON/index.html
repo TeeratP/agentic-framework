@@ -781,6 +781,17 @@ the four classes above, <strong>three (a, b, c) are caught only by pttai at buil
 raw LangGraph surfaces them at runtime (after wasting model calls) or not at
 all. Duplicate names (d) is the one caught by both.</p>
 </blockquote>
+<p>Measured over the full <code>eval/bugbench/</code> corpus (15 buggy + 19 valid pipelines),
+pttai catches <strong>13/13</strong> pttai-only dataflow bugs at build with <strong>0</strong> false
+positives; raw LangGraph catches <strong>0</strong> of those at build (10 surface at runtime,
+3 silently) after burning <strong>15</strong> wasted model calls:</p>
+<p align="center">
+  <img src="../figures/bug_catch.png" width="90%"
+       alt="pttai catches 13/13 pttai-only bugs at build with 0 wasted calls; raw LangGraph catches 0 at build (10 runtime, 3 silent) and wastes 15 LLM calls; 0 pttai false positives on 19 valid pipelines.">
+</p>
+
+<p align="center"><em>Regenerate from the committed data with <code>python figures/make_charts.py</code>.</em></p>
+
 <h2 id="2-lines-of-code-three-architectures">2. Lines of code, three architectures<a class="headerlink" href="#2-lines-of-code-three-architectures" title="Permanent link">&para;</a></h2>
 <p>Same workflow, both ways, from the runnable side-by-side files in
 <code>examples/architectures/</code>. Each file has a <code>pttai_version()</code> and a
@@ -823,6 +834,13 @@ not by hand.</p>
 </tr>
 </tbody>
 </table>
+<p>Across all 12 measured pipelines (<code>eval/loc_results.csv</code>) the totals are <strong>113
+vs 281 LOC — ~60% fewer lines</strong>:</p>
+<p align="center">
+  <img src="../figures/loc_comparison.png" width="90%"
+       alt="Grouped bar chart of lines of code per pipeline: pttai 113 LOC total vs raw LangGraph 281 LOC total across 12 pipelines, about 60% fewer lines.">
+</p>
+
 <h3 id="cognitive-complexity-notes-not-just-line-count">Cognitive-complexity notes (not just line count)<a class="headerlink" href="#cognitive-complexity-notes-not-just-line-count" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>ReAct tool loop</strong> — pttai: one <code>AgentNode(tools=[...])</code> <em>is</em> the loop. Raw
