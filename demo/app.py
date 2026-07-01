@@ -40,39 +40,52 @@ import gradio as gr
 # --- prefilled examples ----------------------------------------------------
 
 WORKING_EXAMPLE = '''\
-# Sentiment router: a DecisionNode picks the branch, each choice has a handler.
-classify = DecisionNode(
-    name="classify", llm=get_llm(),
-    node_prompt="Classify the sentiment of the message.",
-    choices=["positive", "negative"],
+# RAG QA pipeline: retrieve passages, rerank them, then answer grounded in them.
+# Each node's scalar reads are produced by the node before it, so the build-time
+# validator confirms the dataflow and compiles clean.
+retrieve = AgentNode(
+    name="retrieve", llm=get_llm(),
+    node_prompt="Retrieve passages relevant to the question: {question}",
+    reads=["question"], writes={"passages": str},
 )
-praise    = AgentNode(name="praise",    llm=get_llm(), node_prompt="Thank the happy customer.")
-apologize = AgentNode(name="apologize", llm=get_llm(), node_prompt="Apologize to the unhappy customer.")
+rerank = AgentNode(
+    name="rerank", llm=get_llm(),
+    node_prompt="Rerank these passages by relevance: {passages}",
+    reads=["passages"], writes={"context": str},
+)
+answer = AgentNode(
+    name="answer", llm=get_llm(),
+    node_prompt="Answer the question grounded ONLY in this context: {context}",
+    reads=["context"], writes=["messages"],
+)
 
-classify["positive"] > praise        # wire each choice to its handler
-classify["negative"] > apologize
-
-graph = AgenticGraph(start_node=classify, end_nodes={praise, apologize})
+retrieve > rerank > answer            # retrieve -> rerank -> answer
+graph = AgenticGraph(start_node=retrieve, end_nodes={answer})
 '''
 
 BROKEN_EXAMPLE = '''\
-# BROKEN on purpose: `write` reads the scalar key `plan`, but the only node that
-# writes `plan` (`planner`) runs AFTER it. That is a read-before-write — a
-# guaranteed runtime KeyError in raw LangGraph. pttai's validator FAILS the
-# build here, before you ever invoke the graph.
-write = AgentNode(
-    name="write", llm=get_llm(),
-    node_prompt="Write the essay using this plan: {plan}.",
-    reads=["plan"], writes=["messages"],
+# BROKEN on purpose: the same RAG pipeline, but `rerank` is wired BEFORE
+# `retrieve`. So `rerank` reads `passages` when nothing upstream has produced it
+# yet — a read-before-write, i.e. a guaranteed runtime KeyError in raw LangGraph.
+# pttai's validator FAILS the build here, before you ever invoke the graph.
+retrieve = AgentNode(
+    name="retrieve", llm=get_llm(),
+    node_prompt="Retrieve passages relevant to the question: {question}",
+    reads=["question"], writes={"passages": str},
 )
-planner = AgentNode(
-    name="planner", llm=get_llm(),
-    node_prompt="Produce a plan for the essay.",
-    reads=["messages"], writes={"plan": str},
+rerank = AgentNode(
+    name="rerank", llm=get_llm(),
+    node_prompt="Rerank these passages by relevance: {passages}",
+    reads=["passages"], writes={"context": str},
+)
+answer = AgentNode(
+    name="answer", llm=get_llm(),
+    node_prompt="Answer the question grounded ONLY in this context: {context}",
+    reads=["context"], writes=["messages"],
 )
 
-write > planner                       # planner (the producer of `plan`) runs LAST
-graph = AgenticGraph(start_node=write, end_nodes={planner})
+rerank > retrieve > answer            # BUG: rerank runs before retrieve writes `passages`
+graph = AgenticGraph(start_node=rerank, end_nodes={answer})
 '''
 
 
