@@ -25,10 +25,11 @@ an offline fake so the nodes construct.
 
 ## What to try
 
-- **Load working example** → a sentiment router (`DecisionNode` → two handlers).
-  You get the branching diagram and a green validator report.
-- **Load BROKEN example** → a read-before-write (`write` reads `plan` before
-  `planner` produces it). The build fails and the validator error is shown
+- **Load working example** → a RAG QA pipeline (`retrieve > rerank > answer`).
+  You get the compiled-graph diagram and a green validator report.
+- **Load BROKEN example** → the same RAG pipeline wired `rerank > retrieve >
+  answer`, so `rerank` reads `passages` before `retrieve` produces it. The
+  build fails and the validator error is shown
   instead of a diagram. Raw LangGraph would compile this and only blow up at
   runtime. Edit the working example to introduce your own bugs (a dangling
   `decision["x"]` with no `>` handler, a duplicate `name=`, a write to an
