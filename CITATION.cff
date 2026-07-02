@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use pttai, please cite it as below."
+title: "pttai: Build-Time Dataflow Validation for LLM Pipeline Graphs"
+abstract: >-
+  A thin declarative layer over LangGraph that compiles a >-wired agent pipeline
+  to a native LangGraph StateGraph and, before compiling, runs a forward may/must
+  dataflow analysis over the graph. It fails the build with zero model calls when
+  a node reads a state key nothing produces, a branch is unwired, or parallel
+  branches write an unreduced key. Hard errors are raised only from the may
+  (some-path) set, so the analysis is false-positive-free by construction.
+type: software
+license: MIT
+repository-code: "https://github.com/TeeratP/agentic-framework"
+url: "https://github.com/TeeratP/agentic-framework"
+keywords:
+  - large language models
+  - agent frameworks
+  - LangGraph
+  - dataflow analysis
+  - static analysis
+  - NLP pipelines
+authors:
+  # TODO(author): replace with the real author list (name, affiliation, ORCID).
+  - given-names: FIRST
+    family-names: LAST
+    affiliation: "TODO(author): affiliation"
+preferred-citation:
+  type: conference-paper
+  title: "pttai: Build-Time Dataflow Validation for LLM Pipeline Graphs"
+  year: 2026
+  collection-title: "Proceedings of the 2026 Conference on Empirical Methods in Natural Language Processing: System Demonstrations"
+  authors:
+    # TODO(author): replace with the real author list.
+    - given-names: FIRST
+      family-names: LAST
+      affiliation: "TODO(author): affiliation"
