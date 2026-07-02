@@ -3,8 +3,8 @@
 An NLP routing pipeline: a ``DecisionNode`` classifies the document into one of
 its ``choices`` using constrained structured output (the model MUST return a
 valid label), then routes to the matching specialized handler via
-``triage["label"] > handler``. The label goes to the dedicated ``decision``
-channel, never into the conversation.
+``triage["label"] > handler``. The label goes to the dedicated per-node
+``decision_triage`` channel, never into the conversation.
 
     python examples/nlp/doc_triage.py
 """
@@ -38,7 +38,7 @@ def pttai_version() -> str:
 
     graph = AgenticGraph(start_node=triage, end_nodes={bug, feature, question})
     out = graph.invoke(DOCUMENT)
-    return f"routed to {out['decision']!r} -> {out['messages'][-1].content}"
+    return f"routed to {out['decision_triage']!r} -> {out['messages'][-1].content}"
 
 
 # --- equivalent in raw LangGraph ---

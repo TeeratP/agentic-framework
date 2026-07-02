@@ -15,7 +15,7 @@ Builds a small graph that wires three node types with the `>` DSL:
 The randomizer calls a Python tool, the classifier routes on the result, and
 one of the two handlers produces the final reply. The shared state carries the
 conversation (`messages`), a human-readable trace (`log`), and the routing
-label (`decision`).
+label (`decision_classifier`, the classifier node's per-node channel).
 
 Setup:
     pip install -e ".[openai]"        # langchain-openai + python-dotenv
@@ -52,8 +52,8 @@ def build_graph(llm) -> AgenticGraph:
         tools=[random_number],
     )
 
-    # A decision node returns one of `choices` (structured output) into the
-    # `decision` state field; the framework routes on it.
+    # A decision node returns one of `choices` (structured output) into its
+    # per-node `decision_{name}` state field; the framework routes on it.
     classifier = DecisionNode(
         name="classifier",
         llm=llm,
@@ -100,7 +100,7 @@ def main() -> None:
 
     result = graph.invoke(initial_state)
 
-    print("routed to :", result["decision"])
+    print("routed to :", result["decision_classifier"])
     print("final reply:", result["messages"][-1].content)
     print("\ntrace:")
     for line in result["log"]:
