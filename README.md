@@ -1,6 +1,4 @@
-# pttai
-
-**pttai** — *Pythonic Topology Tools for AI*.
+# **pttai** — *Pythonic Topology Tools for AI*
 
 **Build LLM agent graphs in a few lines.** pttai is a small declarative DSL over
 [LangGraph](https://langchain-ai.github.io/langgraph/): wire self-contained,
