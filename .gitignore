@@ -16,3 +16,8 @@ CLAUDE.md
 
 # Private git hooks — kept local, not published.
 .githooks/
+
+# paper/benchmark artifacts — kept locally, not published
+paper/
+figures/
+eval/
