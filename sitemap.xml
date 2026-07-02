@@ -2,46 +2,50 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://teeratp.github.io/pttai/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/COMPARISON/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
+    </url>
+    <url>
+         <loc>https://teeratp.github.io/pttai/EVIDENCE/</loc>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/PRE_PUBLISH_CHECKLIST/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/api-notes/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/coming-from-langgraph/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/getting-started/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/node-types/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/quickstart/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/validator/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/examples/architectures/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
     <url>
          <loc>https://teeratp.github.io/pttai/examples/basics/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-02</lastmod>
     </url>
 </urlset>
