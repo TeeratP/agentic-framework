@@ -111,12 +111,17 @@ build-time validator output side by side — no API key needed. See [`demo/`](ht
 
 ## Install
 
-Not on PyPI yet — install from source:
+```bash
+pip install pttai              # core
+pip install "pttai[openai]"    # + langchain-openai & python-dotenv (for live model calls)
+```
+
+Or from source (for development):
 
 ```bash
 git clone https://github.com/TeeratP/pttai && cd pttai
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[openai]"          # core + langchain-openai & python-dotenv
+pip install -e ".[openai,dev]"
 ```
 
 Requires **Python ≥ 3.10** (core deps: LangGraph ≥ 1.0, langchain-core ≥ 1.0,
