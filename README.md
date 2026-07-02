@@ -16,10 +16,12 @@ for read-before-written dataflow bugs *before* you invoke. You keep the whole
 LangGraph ecosystem (streaming, async, checkpointers, LangSmith) and can drop
 down to raw LangGraph anytime — no lock-in.
 
+[![PyPI](https://img.shields.io/pypi/v/pttai)](https://pypi.org/project/pttai/)
+[![Docs](https://img.shields.io/badge/docs-teeratp.github.io%2Fpttai-blue)](https://teeratp.github.io/pttai/)
+[![CI](https://github.com/TeeratP/pttai/actions/workflows/ci.yml/badge.svg)](https://github.com/TeeratP/pttai/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1.0-orange)
-![tests](https://img.shields.io/badge/tests-165%20passing-green)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ## pttai vs. raw LangGraph
 
